@@ -1,0 +1,16 @@
+{
+  "name": "sosync",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w apps/api",
+    "api:dev": "npm run dev -w apps/api",
+    "api:build": "npm run build -w apps/api",
+    "mobile:start": "npm run start -w apps/mobile",
+    "shared:build": "npm run build -w packages/shared"
+  }
+}

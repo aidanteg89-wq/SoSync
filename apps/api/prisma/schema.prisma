@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String   @id @default(uuid())
+  name             String
+  email            String   @unique
+  createdAt        DateTime @default(now())
+  passwordHash     String?
+  googleId         String?  @unique
+  googleRefreshToken String?
+  expoPushToken    String?
+
+  friends          Friend[]             @relation("UserFriends")
+  friendOf         Friend[]             @relation("FriendOf")
+  availability     AvailabilityBlock[]
+  createdEvents    Event[]
+  participations   EventParticipant[]
+}
+
+model Friend {
+  id       String @id @default(uuid())
+  userId   String
+  friendId String
+  status   String @default("pending")
+
+  user     User   @relation("UserFriends", fields: [userId], references: [id])
+  friend   User   @relation("FriendOf", fields: [friendId], references: [id])
+
+  @@unique([userId, friendId])
+}
+
+model AvailabilityBlock {
+  id        String @id @default(uuid())
+  userId    String
+  dayOfWeek String
+  startTime String
+  endTime   String
+  type      String
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Event {
+  id        String @id @default(uuid())
+  title     String
+  startTime String
+  endTime   String
+  category  String
+  createdBy String
+
+  creator      User               @relation(fields: [createdBy], references: [id])
+  participants EventParticipant[]
+}
+
+model EventParticipant {
+  id      String @id @default(uuid())
+  eventId String
+  userId  String
+  status  String @default("pending")
+
+  event Event @relation(fields: [eventId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+}
+
+model DismissedSuggestion {
+  id        String   @id @default(uuid())
+  userId    String
+  friendId  String
+  dayOfWeek String
+  startTime String
+  endTime   String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, friendId, dayOfWeek, startTime, endTime])
+  @@index([userId])
+}
