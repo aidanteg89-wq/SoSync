@@ -1,14 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
+import { FlatList } from 'react-native';
+import { Text, XStack, YStack } from 'tamagui';
+import { CalendarCheck } from 'lucide-react-native';
+import { useAuth } from '../../lib/AuthContext';
+import { API_URL } from '../../lib/constants';
 import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  FlatList,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from '../context/AuthContext';
-import { API_URL } from '../constants';
+  AppScreen,
+  AppHeader,
+  AppButton,
+  AppCard,
+  AppBadge,
+  EmptyState,
+  SkeletonList,
+} from '../../components/ui';
+import { colors } from '../../theme/colors';
 
 interface EventItem {
   id: string;
@@ -59,8 +64,11 @@ export default function EventsScreen() {
   const formatTime = (iso: string) => {
     try {
       const d = new Date(iso);
-      return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) +
-        ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      return (
+        d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) +
+        ' ' +
+        d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+      );
     } catch {
       return iso;
     }
@@ -68,72 +76,64 @@ export default function EventsScreen() {
 
   if (!user) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <Text style={styles.title}>My Events</Text>
-        <View style={styles.emptyContainer}>
-          <Text style={styles.empty}>Sign in on the Profile tab to see your events</Text>
-        </View>
-      </SafeAreaView>
+      <AppScreen>
+        <AppHeader title="My Events" />
+        <EmptyState message="Sign in on the Profile tab to see your events" />
+      </AppScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>My Events</Text>
-        <TouchableOpacity
-          style={[styles.refreshBtn, loading && styles.btnDisabled]}
-          onPress={fetchEvents}
-          disabled={loading}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-        >
-          <Text style={styles.refreshBtnText}>{loading ? '...' : 'Refresh'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <FlatList<{ event: EventItem; participants: EventParticipant[] }>
-        data={events}
-        keyExtractor={(item: { event: EventItem; participants: EventParticipant[] }) => item.event.id}
-        style={styles.list}
-        contentContainerStyle={events.length === 0 ? styles.emptyContainer : undefined}
-        renderItem={({ item }: { item: { event: EventItem; participants: EventParticipant[] } }) => (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>{item.event.title}</Text>
-            <Text style={styles.cardTime}>{formatTime(item.event.startTime)} – {formatTime(item.event.endTime)}</Text>
-            <View style={styles.badges}>
-              <View style={styles.categoryBadge}>
-                <Text style={styles.categoryText}>{item.event.category}</Text>
-              </View>
-              <Text style={styles.participantCount}>
-                {item.participants.filter((p: EventParticipant) => p.status === 'accepted').length} accepted
-              </Text>
-            </View>
-          </View>
-        )}
-        ListEmptyComponent={
-          <Text style={styles.empty}>No events yet — accept a suggestion to create one</Text>
+    <AppScreen>
+      <AppHeader
+        title="My Events"
+        action={
+          <AppButton
+            variant="primary"
+            size="sm"
+            loading={loading}
+            onPress={fetchEvents}
+            accessibilityLabel="Refresh events"
+          >
+            Refresh
+          </AppButton>
         }
       />
-    </SafeAreaView>
+
+      {loading && events.length === 0 ? (
+        <SkeletonList count={3} />
+      ) : (
+        <FlatList<{ event: EventItem; participants: EventParticipant[] }>
+          data={events}
+          keyExtractor={(item: { event: EventItem; participants: EventParticipant[] }) => item.event.id}
+          style={{ flex: 1 }}
+          contentContainerStyle={events.length === 0 ? { flex: 1 } : { paddingBottom: 24 }}
+          renderItem={({ item }: { item: { event: EventItem; participants: EventParticipant[] } }) => (
+            <AppCard elevated marginBottom={10}>
+              <YStack gap={8}>
+                <XStack items="center" gap={10}>
+                  <CalendarCheck size={20} color={colors.primary} />
+                  <Text fontSize={16} fontWeight="600" color={colors.text} flex={1}>
+                    {item.event.title}
+                  </Text>
+                </XStack>
+                <Text fontSize={13} color={colors.textMuted} lineHeight={20}>
+                  {formatTime(item.event.startTime)} – {formatTime(item.event.endTime)}
+                </Text>
+                <XStack items="center" gap={10}>
+                  <AppBadge variant="primary">{item.event.category}</AppBadge>
+                  <Text fontSize={12} color={colors.textMuted}>
+                    {item.participants.filter((p: EventParticipant) => p.status === 'accepted').length} accepted
+                  </Text>
+                </XStack>
+              </YStack>
+            </AppCard>
+          )}
+          ListEmptyComponent={
+            <EmptyState message="No events yet — accept a suggestion to create one" />
+          }
+        />
+      )}
+    </AppScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa', paddingHorizontal: 20 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 16 },
-  title: { fontSize: 28, fontWeight: '800', color: '#1a1a2e' },
-  refreshBtn: { backgroundColor: '#4361ee', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 },
-  refreshBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  btnDisabled: { opacity: 0.5 },
-  list: { flex: 1 },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  empty: { color: '#adb5bd', fontSize: 15, textAlign: 'center', paddingHorizontal: 20 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 10 },
-  cardTitle: { fontSize: 16, fontWeight: '600', color: '#212529', marginBottom: 4 },
-  cardTime: { fontSize: 13, color: '#6c757d', marginBottom: 8 },
-  badges: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  categoryBadge: { backgroundColor: '#e8f4fd', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  categoryText: { color: '#4361ee', fontSize: 12, fontWeight: '600' },
-  participantCount: { fontSize: 12, color: '#6c757d' },
-});

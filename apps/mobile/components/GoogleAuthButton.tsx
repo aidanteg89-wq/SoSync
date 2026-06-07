@@ -1,4 +1,4 @@
-import { Alert, Platform, Pressable, StyleSheet, Text } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import Constants from 'expo-constants';
@@ -8,6 +8,7 @@ import {
   isGoogleClientIdConfigured,
   normalizeGoogleClientId,
 } from '../lib/constants';
+import { AppButton } from './ui/AppButton';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -17,12 +18,39 @@ const GOOGLE_DISCOVERY: AuthSession.DiscoveryDocument = {
   revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
 };
 
-const SCOPES = [
+const SCOPES_SIGN_IN = ['openid', 'profile', 'email'];
+
+const SCOPES_CALENDAR = [
   'openid',
   'profile',
   'email',
   'https://www.googleapis.com/auth/calendar.events',
 ];
+
+function scopesForVariant(variant: 'signIn' | 'calendar'): string[] {
+  return variant === 'calendar' ? SCOPES_CALENDAR : SCOPES_SIGN_IN;
+}
+
+function formatGoogleError(msg: string, variant: 'signIn' | 'calendar'): string {
+  const lower = msg.toLowerCase();
+  if (
+    lower.includes('verification') ||
+    lower.includes('access blocked') ||
+    lower.includes('has not completed')
+  ) {
+    return (
+      `${msg}\n\n` +
+      'Your Google Cloud app is in Testing mode. Fix:\n' +
+      '1. console.cloud.google.com → APIs & Services → OAuth consent screen\n' +
+      '2. Add your Gmail under Test users\n' +
+      '3. Sign in with that exact Gmail address\n' +
+      (variant === 'calendar'
+        ? '4. Calendar access needs that test user + Calendar API enabled'
+        : '')
+    );
+  }
+  return msg;
+}
 
 function resolveGoogleClientId(): string | undefined {
   const fromEnv = normalizeGoogleClientId(ENV_GOOGLE_CLIENT_ID);
@@ -43,7 +71,6 @@ function showConfigAlert(): void {
   else Alert.alert('Google sign-in not configured', msg);
 }
 
-/** Where Expo / the app listens for the OAuth result (sosync:// or exp:// in Expo Go). */
 function appOAuthReturnUrl(): string {
   return AuthSession.makeRedirectUri({
     scheme: 'sosync',
@@ -51,22 +78,25 @@ function appOAuthReturnUrl(): string {
   });
 }
 
-/**
- * Pack the app return URL into OAuth state so the HTTPS API callback can
- * 302 back into the app — required for Expo Go (can't complete on Render URL alone).
- */
 function buildOAuthState(appReturn: string): string {
   return `${Date.now().toString(36)}|${encodeURIComponent(appReturn)}`;
 }
 
 interface GoogleAuthButtonProps {
   label: string;
+  variant?: 'signIn' | 'calendar';
   busy: boolean;
   onBusyChange: (busy: boolean) => void;
   onCode: (code: string, redirectUri: string, codeVerifier: string) => Promise<string | null>;
 }
 
-export default function GoogleAuthButton({ label, busy, onBusyChange, onCode }: GoogleAuthButtonProps) {
+export default function GoogleAuthButton({
+  label,
+  variant = 'signIn',
+  busy,
+  onBusyChange,
+  onCode,
+}: GoogleAuthButtonProps) {
   const handlePress = async () => {
     const clientId = resolveGoogleClientId();
     if (!isGoogleClientIdConfigured(clientId)) {
@@ -79,18 +109,20 @@ export default function GoogleAuthButton({ label, busy, onBusyChange, onCode }: 
 
     onBusyChange(true);
     try {
+      const extraParams: Record<string, string> =
+        variant === 'calendar'
+          ? { access_type: 'offline', prompt: 'consent' }
+          : { prompt: 'select_account' };
+
       const request = await AuthSession.loadAsync(
         {
           clientId: clientId!,
-          scopes: SCOPES,
+          scopes: scopesForVariant(variant),
           redirectUri: GOOGLE_REDIRECT_URI,
           responseType: AuthSession.ResponseType.Code,
           usePKCE: true,
           state: oauthState,
-          extraParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
+          extraParams,
         },
         GOOGLE_DISCOVERY,
       );
@@ -101,7 +133,6 @@ export default function GoogleAuthButton({ label, busy, onBusyChange, onCode }: 
         return;
       }
 
-      // Wait for deep link (sosync:// or exp://), NOT the HTTPS Render callback.
       const browserResult = await WebBrowser.openAuthSessionAsync(authUrl, appReturn);
 
       if (browserResult.type === 'cancel') {
@@ -125,12 +156,12 @@ export default function GoogleAuthButton({ label, busy, onBusyChange, onCode }: 
       const parsed = request.parseReturnUrl(browserResult.url);
 
       if (parsed.type === 'error') {
-        const msg =
+        const raw =
           parsed.error?.message ??
           parsed.params?.error_description ??
           parsed.params?.error ??
           'Google sign-in failed.';
-        Alert.alert('Google sign-in failed', String(msg));
+        Alert.alert('Google sign-in failed', formatGoogleError(String(raw), variant));
         return;
       }
 
@@ -159,31 +190,14 @@ export default function GoogleAuthButton({ label, busy, onBusyChange, onCode }: 
   };
 
   return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.googleBtn,
-        (busy || pressed) && styles.googleBtnPressed,
-      ]}
-      onPress={handlePress}
+    <AppButton
+      variant="secondary"
+      loading={busy}
       disabled={busy}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: busy }}
+      onPress={handlePress}
+      accessibilityLabel={label}
     >
-      <Text style={styles.googleBtnText}>{busy ? 'Connecting...' : label}</Text>
-    </Pressable>
+      {busy ? 'Connecting...' : label}
+    </AppButton>
   );
 }
-
-const styles = StyleSheet.create({
-  googleBtn: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#dee2e6',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  googleBtnPressed: { opacity: 0.7, backgroundColor: '#f8f9fa' },
-  googleBtnText: { color: '#212529', fontWeight: '600', fontSize: 15 },
-});

@@ -1,14 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
+import { FlatList } from 'react-native';
+import { Text, XStack, YStack } from 'tamagui';
+import { useAuth } from '../../lib/AuthContext';
+import { API_URL } from '../../lib/constants';
 import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  FlatList,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from '../context/AuthContext';
-import { API_URL } from '../constants';
+  AppScreen,
+  AppHeader,
+  AppButton,
+  AppCard,
+  AppBadge,
+  EmptyState,
+  ErrorBanner,
+  SkeletonList,
+} from '../../components/ui';
+import { colors } from '../../theme/colors';
 
 interface Suggestion {
   id: string;
@@ -107,115 +112,91 @@ export default function SuggestionsScreen() {
 
   if (!user) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <Text style={styles.title}>Suggestions</Text>
-        <View style={styles.emptyContainer}>
-          <Text style={styles.empty}>Sign in on the Profile tab to see suggestions</Text>
-        </View>
-      </SafeAreaView>
+      <AppScreen>
+        <AppHeader title="Suggestions" />
+        <EmptyState message="Sign in on the Profile tab to see suggestions" />
+      </AppScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Suggestions</Text>
-        <TouchableOpacity
-          style={[styles.refreshBtn, loading && styles.btnDisabled]}
-          onPress={fetchSuggestions}
-          disabled={loading}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Refresh"
-        >
-          <Text style={styles.refreshBtnText}>{loading ? '...' : 'Refresh'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {error !== '' && <Text style={styles.error}>{error}</Text>}
-
-      <FlatList<Suggestion>
-        data={suggestions}
-        keyExtractor={(item: Suggestion) => item.id}
-        style={styles.list}
-        contentContainerStyle={suggestions.length === 0 ? styles.emptyContainer : undefined}
-        renderItem={({ item }: { item: Suggestion }) => {
-          if (declined.has(item.id)) return null;
-          return (
-            <View style={styles.card}>
-              <View style={styles.cardBody}>
-                <Text style={styles.cardTitle}>{item.title}</Text>
-                <Text style={styles.cardTime}>
-                  {capitalize(item.dayOfWeek)} · {item.startTime} – {item.endTime}
-                </Text>
-              </View>
-              {accepted.has(item.id) ? (
-                <View style={styles.acceptedBadge}>
-                  <Text style={styles.acceptedText}>Accepted</Text>
-                </View>
-              ) : (
-                <View style={styles.btnRow}>
-                  <TouchableOpacity
-                    style={styles.declineBtn}
-                    onPress={() => handleDecline(item)}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Decline"
-                  >
-                    <Text style={styles.declineBtnText}>Decline</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.acceptBtn}
-                    onPress={() => handleAccept(item)}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Accept"
-                  >
-                    <Text style={styles.acceptBtnText}>Accept</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          );
-        }}
-        ListEmptyComponent={
-          <Text style={styles.empty}>No suggestions found — add friends and set your availability first</Text>
+    <AppScreen>
+      <AppHeader
+        title="Suggestions"
+        action={
+          <AppButton
+            variant="primary"
+            size="sm"
+            loading={loading}
+            onPress={fetchSuggestions}
+            accessibilityLabel="Refresh suggestions"
+          >
+            Refresh
+          </AppButton>
         }
       />
-    </SafeAreaView>
+
+      <ErrorBanner message={error} />
+
+      {loading && suggestions.length === 0 ? (
+        <SkeletonList count={4} />
+      ) : (
+        <FlatList<Suggestion>
+          data={suggestions}
+          keyExtractor={(item: Suggestion) => item.id}
+          style={{ flex: 1 }}
+          contentContainerStyle={
+            suggestions.length === 0 ? { flex: 1 } : { paddingBottom: 24 }
+          }
+          renderItem={({ item }: { item: Suggestion }) => {
+            if (declined.has(item.id)) return null;
+            return (
+              <AppCard marginBottom={10}>
+                <XStack items="center" gap={12}>
+                  <YStack flex={1} gap={4}>
+                    <Text fontSize={16} fontWeight="600" color={colors.text}>
+                      {item.title}
+                    </Text>
+                    <Text fontSize={13} color={colors.textMuted}>
+                      {capitalize(item.dayOfWeek)} · {item.startTime} – {item.endTime}
+                    </Text>
+                    {item.friendName ? (
+                      <Text fontSize={12} color={colors.textMuted}>
+                        with {item.friendName}
+                      </Text>
+                    ) : null}
+                  </YStack>
+                  {accepted.has(item.id) ? (
+                    <AppBadge variant="success">Accepted</AppBadge>
+                  ) : (
+                    <XStack gap={8}>
+                      <AppButton
+                        variant="secondary"
+                        size="sm"
+                        onPress={() => handleDecline(item)}
+                        accessibilityLabel="Decline suggestion"
+                      >
+                        Decline
+                      </AppButton>
+                      <AppButton
+                        variant="success"
+                        size="sm"
+                        onPress={() => handleAccept(item)}
+                        accessibilityLabel="Accept suggestion"
+                      >
+                        Accept
+                      </AppButton>
+                    </XStack>
+                  )}
+                </XStack>
+              </AppCard>
+            );
+          }}
+          ListEmptyComponent={
+            <EmptyState message="No suggestions found — add friends and set your availability first" />
+          }
+        />
+      )}
+    </AppScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa', paddingHorizontal: 20 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 16 },
-  title: { fontSize: 28, fontWeight: '800', color: '#1a1a2e' },
-  refreshBtn: { backgroundColor: '#4361ee', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 },
-  refreshBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  btnDisabled: { opacity: 0.5 },
-  error: { color: '#e63946', fontSize: 13, marginBottom: 12 },
-  list: { flex: 1 },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  empty: { color: '#adb5bd', fontSize: 15, textAlign: 'center', paddingHorizontal: 20 },
-  card: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 10,
-    flexDirection: 'row', alignItems: 'center',
-  },
-  cardBody: { flex: 1 },
-  cardTitle: { fontSize: 16, fontWeight: '600', color: '#212529', marginBottom: 4 },
-  cardTime: { fontSize: 13, color: '#6c757d' },
-  btnRow: { flexDirection: 'row', gap: 8 },
-  acceptBtn: { backgroundColor: '#2dc653', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
-  acceptBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  declineBtn: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#dee2e6',
-  },
-  declineBtnText: { color: '#6c757d', fontWeight: '600', fontSize: 13 },
-  acceptedBadge: { backgroundColor: '#d4edda', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
-  acceptedText: { color: '#155724', fontWeight: '600', fontSize: 13 },
-});

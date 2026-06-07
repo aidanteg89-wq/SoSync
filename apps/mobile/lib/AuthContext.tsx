@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL } from '../constants';
+import { API_URL } from './constants';
 
 interface User {
   id: string;
@@ -101,7 +101,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify({ code, redirectUri, codeVerifier }),
         });
         const body = await res.json();
-        if (!res.ok) return body.error ?? 'Google sign-in failed';
+        if (!res.ok) {
+          return body.hint ? `${body.error}: ${body.hint}` : (body.error ?? 'Google sign-in failed');
+        }
         await persist(body.token, body.user, Boolean(body.calendarConnected));
         return null;
       } catch {

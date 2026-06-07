@@ -3,10 +3,16 @@ import { Platform } from 'react-native';
 import { Slot } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useFonts, Inter_400Regular, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold } from '@expo-google-fonts/inter';
+import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { API_URL } from './constants';
+import { TamaguiProvider, Theme } from 'tamagui';
+import { AuthProvider, useAuth } from '../lib/AuthContext';
+import { API_URL } from '../lib/constants';
+import tamaguiConfig from '../tamagui.config';
+
+SplashScreen.preventAutoHideAsync();
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -53,13 +59,34 @@ function PushTokenRegistrar() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    Inter: Inter_400Regular,
+    InterSemiBold: Inter_600SemiBold,
+    InterBold: Inter_700Bold,
+    InterExtraBold: Inter_800ExtraBold,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, fontError]);
+
+  if (!fontsLoaded && !fontError) {
+    return null;
+  }
+
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <PushTokenRegistrar />
-        <Slot />
-        <StatusBar style="auto" />
-      </AuthProvider>
-    </SafeAreaProvider>
+    <TamaguiProvider config={tamaguiConfig} defaultTheme="nature">
+      <Theme name="nature">
+        <SafeAreaProvider>
+          <AuthProvider>
+            <PushTokenRegistrar />
+            <Slot />
+            <StatusBar style="dark" />
+          </AuthProvider>
+        </SafeAreaProvider>
+      </Theme>
+    </TamaguiProvider>
   );
 }
