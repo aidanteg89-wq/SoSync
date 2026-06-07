@@ -8,6 +8,16 @@ const router = Router();
 
 const SALT_ROUNDS = 10;
 
+function normalizeGoogleClientId(id: string | undefined): string | undefined {
+  if (!id) return undefined;
+  const suffix = '.apps.googleusercontent.com';
+  let normalized = id.trim();
+  while (normalized.endsWith(suffix + suffix)) {
+    normalized = normalized.slice(0, -suffix.length);
+  }
+  return normalized;
+}
+
 router.post('/register', async (req, res) => {
   const { name, email, password } = req.body as {
     name?: string; email?: string; password?: string;
@@ -88,8 +98,8 @@ router.post('/google', async (req, res) => {
     return;
   }
 
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const clientId = normalizeGoogleClientId(process.env.GOOGLE_CLIENT_ID);
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
   if (!clientId || !clientSecret) {
     res.status(500).json({ error: 'Google OAuth is not configured on the server' });
     return;
@@ -107,7 +117,14 @@ router.post('/google', async (req, res) => {
     tokens = result.tokens;
   } catch (err) {
     console.error('Google token exchange failed:', err);
-    res.status(401).json({ error: 'Failed to exchange Google authorization code' });
+    const message = err instanceof Error ? err.message : String(err);
+    const hint = message.includes('invalid_client')
+      ? 'Check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET on the server — Client ID must end with .apps.googleusercontent.com exactly once.'
+      : undefined;
+    res.status(401).json({
+      error: 'Failed to exchange Google authorization code',
+      ...(hint ? { hint } : {}),
+    });
     return;
   }
 
@@ -165,30 +182,51 @@ router.post('/google', async (req, res) => {
 });
 
 /**
- * OAuth redirect target registered in Google Cloud Console.
- * Google requires https:// URLs on a public domain (e.g. *.onrender.com).
- * Expo's in-app browser completes the session when this URL loads with ?code=...
+ * OAuth redirect target registered in Google Cloud Console (HTTPS, .com).
+ * After Google redirects here, we 302 into the mobile app using the return
+ * URL encoded in the OAuth `state` parameter (sosync:// or exp:// in Expo Go).
  */
 router.get('/google/callback', (req, res) => {
-  const { error, error_description: errorDescription } = req.query;
+  const { code, error, error_description: errorDescription, state } = req.query;
+
+  const appReturn = parseAppReturnFromState(state);
 
   if (error) {
-    res.status(400).send(`<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Sign-in failed</title></head>
-<body style="font-family:system-ui;padding:2rem;text-align:center">
-  <h1>Google sign-in failed</h1>
-  <p>${String(errorDescription ?? error)}</p>
-  <p>You can close this window and return to SoSync.</p>
-</body></html>`);
+    const params = new URLSearchParams({
+      error: String(error),
+      ...(errorDescription ? { error_description: String(errorDescription) } : {}),
+      ...(state ? { state: String(state) } : {}),
+    });
+    res.redirect(`${appReturn}?${params.toString()}`);
     return;
   }
 
-  res.send(`<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Signed in</title></head>
-<body style="font-family:system-ui;padding:2rem;text-align:center">
-  <h1>Signed in with Google</h1>
-  <p>Return to the SoSync app — you can close this window.</p>
-</body></html>`);
+  if (!code || typeof code !== 'string') {
+    res.status(400).send('Missing authorization code from Google.');
+    return;
+  }
+
+  const params = new URLSearchParams({ code });
+  if (state) params.set('state', String(state));
+  res.redirect(`${appReturn}?${params.toString()}`);
 });
+
+/** state format: "<nonce>|urlencoded-app-return-url>" */
+function parseAppReturnFromState(state: unknown): string {
+  const fallback = 'sosync://oauth2redirect';
+  if (typeof state !== 'string' || !state.includes('|')) {
+    return fallback;
+  }
+  const encoded = state.split('|').slice(1).join('|');
+  try {
+    const decoded = decodeURIComponent(encoded);
+    if (decoded.startsWith('sosync://') || decoded.startsWith('exp://')) {
+      return decoded;
+    }
+  } catch {
+    // ignore
+  }
+  return fallback;
+}
 
 export default router;
