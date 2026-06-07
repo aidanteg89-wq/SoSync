@@ -164,4 +164,31 @@ router.post('/google', async (req, res) => {
   });
 });
 
+/**
+ * OAuth redirect target registered in Google Cloud Console.
+ * Google requires https:// URLs on a public domain (e.g. *.onrender.com).
+ * Expo's in-app browser completes the session when this URL loads with ?code=...
+ */
+router.get('/google/callback', (req, res) => {
+  const { error, error_description: errorDescription } = req.query;
+
+  if (error) {
+    res.status(400).send(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Sign-in failed</title></head>
+<body style="font-family:system-ui;padding:2rem;text-align:center">
+  <h1>Google sign-in failed</h1>
+  <p>${String(errorDescription ?? error)}</p>
+  <p>You can close this window and return to SoSync.</p>
+</body></html>`);
+    return;
+  }
+
+  res.send(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Signed in</title></head>
+<body style="font-family:system-ui;padding:2rem;text-align:center">
+  <h1>Signed in with Google</h1>
+  <p>Return to the SoSync app — you can close this window.</p>
+</body></html>`);
+});
+
 export default router;

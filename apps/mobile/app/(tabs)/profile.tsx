@@ -14,6 +14,7 @@ import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import Constants from 'expo-constants';
 import { useAuth } from '../context/AuthContext';
+import { API_URL } from '../constants';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -48,12 +49,9 @@ export default function ProfileScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
 
-  // Redirect URI must exactly match what's registered in Google Cloud Console.
-  // For Expo Go / dev: makeRedirectUri returns an https://auth.expo.io/... proxy URL when useProxy is true.
-  const redirectUri = AuthSession.makeRedirectUri({
-    scheme: 'sosync',
-    path: 'oauth2redirect',
-  });
+  // Google Web OAuth clients require https:// redirect URIs on a public domain (.com, etc.).
+  // Register this exact URL in Google Cloud Console → Authorized redirect URIs.
+  const redirectUri = `${API_URL}/auth/google/callback`;
 
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     {
