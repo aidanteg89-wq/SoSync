@@ -11,6 +11,11 @@
     "api:dev": "npm run dev -w apps/api",
     "api:build": "npm run build -w apps/api",
     "mobile:start": "npm run start -w apps/mobile",
+    "mobile:ios": "npm run ios -w apps/mobile",
+    "mobile:clear": "npm run start -w apps/mobile -- -c",
     "shared:build": "npm run build -w packages/shared"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.10"
   }
 }

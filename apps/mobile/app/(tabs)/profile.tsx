@@ -14,7 +14,7 @@ import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import Constants from 'expo-constants';
 import { useAuth } from '../context/AuthContext';
-import { API_URL } from '../constants';
+import { API_URL, GOOGLE_CLIENT_ID as ENV_GOOGLE_CLIENT_ID, isGoogleClientIdConfigured } from '../constants';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -33,9 +33,9 @@ const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
 ];
 
-// Expo config reads `extra.googleClientId` from app.json / app.config.js.
-// Set it to your Google Cloud "Web application" OAuth 2.0 client ID.
+// Prefer EXPO_PUBLIC_GOOGLE_CLIENT_ID in apps/mobile/.env; fallback to app.json extra.
 const GOOGLE_CLIENT_ID: string | undefined =
+  ENV_GOOGLE_CLIENT_ID ??
   (Constants.expoConfig?.extra?.googleClientId as string | undefined) ??
   (Constants.manifestExtra?.googleClientId as string | undefined);
 
@@ -96,11 +96,16 @@ export default function ProfileScreen() {
   };
 
   const handleGooglePress = () => {
-    if (!GOOGLE_CLIENT_ID) {
+    if (!isGoogleClientIdConfigured(GOOGLE_CLIENT_ID)) {
       const msg =
-        'Google sign-in is not configured. Set expo.extra.googleClientId in app.json to your OAuth 2.0 Web client ID.';
+        'Google Client ID is missing or still a placeholder.\n\n' +
+        '1. Google Cloud → Credentials → Web OAuth client → copy Client ID\n' +
+        '2. Add to apps/mobile/.env:\n' +
+        '   EXPO_PUBLIC_GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com\n' +
+        '3. Same ID + Secret on Render (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)\n' +
+        '4. Restart: npx expo start -c';
       if (Platform.OS === 'web') window.alert(msg);
-      else Alert.alert('Setup needed', msg);
+      else Alert.alert('Google sign-in not configured', msg);
       return;
     }
     promptAsync();
